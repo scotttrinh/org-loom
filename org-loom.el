@@ -61,6 +61,33 @@
   :type 'string
   :group 'org-loom)
 
+(defcustom org-loom-custom-dice-types
+  '(("F" . (:sides (-1 -1 0 0 1 1) :combiner org-loom--sum-numbers))
+    ("MythicAdjective" . (:sides ("Scary" "Dry" "Cold" "Hot" "Warm" "Bright" 
+                                  "Dark" "Loud" "Quiet" "Sharp" "Dull" "Fast"
+                                  "Slow" "Big" "Small" "Heavy" "Light")
+                          :combiner org-loom--join-strings)))
+  "Custom dice type definitions.
+
+Each entry is of the form (TYPE . DEFINITION) where:
+- TYPE is a string identifying the dice type (e.g. \"F\" for Fudge dice)
+- DEFINITION is a plist with:
+  - :sides - list of possible values for each side of the die
+  - :combiner - function to combine multiple roll results
+
+The combiner function should accept a list of individual roll results
+and return a combined result. Built-in combiners include:
+- org-loom--sum-numbers (numeric addition)
+- org-loom--join-strings (string concatenation with spaces)
+
+Example custom dice:
+- Fudge dice: \"F\" with sides (-1 -1 0 0 1 1) and combiner org-loom--sum-numbers
+- Oracle dice: \"MythicAdjective\" with word sides and string combiner"
+  :type '(alist :key-type string
+                :value-type (plist :key-type symbol 
+                                   :value-type (choice list function)))
+  :group 'org-loom)
+
 ;;; Core Variables
 
 (defvar org-loom-version "0.1.0"
@@ -152,6 +179,16 @@
 
 ;;; Dice Notation Parsing
 
+(defun org-loom--join-strings (string-list)
+  "Join a list of strings with spaces.
+This is a built-in combiner function for custom dice that return strings."
+  (mapconcat #'identity string-list " "))
+
+(defun org-loom--sum-numbers (number-list)
+  "Sum a list of numbers.
+This is a built-in combiner function for custom dice that return numbers."
+  (apply #'+ number-list))
+
 (defun org-loom-parse-dice-notation (dice-string)
   "Parse dice notation string and return components.
 
@@ -193,23 +230,28 @@ DICE-ALIST should be the output from `org-loom-parse-dice-notation'.
 
 Returns an alist with the following keys if rolling succeeds:
   - :rolls - list of individual die roll results
-  - :modifier - the modifier value applied (0 if none)
-  - :total - sum of all rolls plus modifier
+  - :modifier - the modifier value applied (0 if none, or nil for custom dice)
+  - :total - combined result (sum for numeric, combined value for custom dice)
 
-Returns nil if the dice cannot be rolled (e.g., non-numeric dice type,
+For numeric dice, :total is the sum of rolls plus modifier.
+For custom dice, :total is the result of applying the dice's combiner function
+to the roll results, and :modifier will be nil.
+
+Returns nil if the dice cannot be rolled (e.g., unknown custom dice type,
 invalid count, etc.)."
   (when (and dice-alist
              (listp dice-alist))
     (let ((count (alist-get :count dice-alist))
           (type (alist-get :type dice-alist))
           (modifier (alist-get :modifier dice-alist)))
-      ;; Only process numeric dice for now
-      (when (and count type modifier
-                 (numberp count)
-                 (numberp type)
-                 (numberp modifier)
-                 (> count 0)
-                 (> type 0))
+      (cond
+       ;; Numeric dice
+       ((and count type modifier
+             (numberp count)
+             (numberp type)
+             (numberp modifier)
+             (> count 0)
+             (> type 0))
         (let ((rolls '())
               (roll-sum 0))
           ;; Roll each die
@@ -223,7 +265,30 @@ invalid count, etc.)."
           (let ((total (+ roll-sum modifier)))
             `((:rolls . ,rolls)
               (:modifier . ,modifier)
-              (:total . ,total))))))))
+              (:total . ,total)))))
+       
+       ;; Custom dice
+       ((and count type
+             (numberp count)
+             (stringp type)
+             (> count 0))
+        (let ((custom-def (alist-get type org-loom-custom-dice-types nil nil #'string=)))
+          (when custom-def
+            (let ((sides (plist-get custom-def :sides))
+                  (combiner (plist-get custom-def :combiner)))
+              (when (and sides combiner (> (length sides) 0))
+                (let ((rolls '()))
+                  ;; Roll each die
+                  (dotimes (_ count)
+                    (let ((roll (nth (random (length sides)) sides)))
+                      (push roll rolls)))
+                  ;; Reverse rolls to maintain order
+                  (setq rolls (nreverse rolls))
+                  ;; Combine results using the dice's combiner
+                  (let ((total (funcall combiner rolls)))
+                    `((:rolls . ,rolls)
+                      (:modifier . nil)
+                      (:total . ,total)))))))))))))
 
 (defun org-loom-roll-dice-notation (dice-string)
   "Parse and roll dice from dice notation string.

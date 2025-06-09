@@ -207,6 +207,13 @@
 
 ;;; Dice rolling tests
 
+(ert-deftest org-loom-test-join-strings ()
+  "Test the string joining helper function."
+  (should (string= (org-loom--join-strings '("Hello" "World")) "Hello World"))
+  (should (string= (org-loom--join-strings '("One")) "One"))
+  (should (string= (org-loom--join-strings '("A" "B" "C")) "A B C"))
+  (should (string= (org-loom--join-strings '()) "")))
+
 (ert-deftest org-loom-test-roll-dice-basic ()
   "Test basic dice rolling functionality."
   ;; Test d6 (single six-sided die)
@@ -285,15 +292,58 @@
     (let ((roll-sum (apply #'+ (alist-get :rolls result))))
       (should (= (alist-get :total result) (+ roll-sum 10))))))
 
-(ert-deftest org-loom-test-roll-dice-non-numeric ()
-  "Test that non-numeric dice return nil (not implemented yet)."
-  ;; Test fudge dice (should return nil for now)
+(ert-deftest org-loom-test-roll-dice-custom-fudge ()
+  "Test rolling Fudge dice (custom numeric dice)."
+  ;; Test single fudge die
+  (let* ((parsed (org-loom-parse-dice-notation "dF"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 1))
+    (should (member (car (alist-get :rolls result)) '(-1 0 1)))
+    (should (null (alist-get :modifier result)))
+    (should (numberp (alist-get :total result)))
+    (should (= (alist-get :total result) (car (alist-get :rolls result)))))
+  
+  ;; Test multiple fudge dice
   (let* ((parsed (org-loom-parse-dice-notation "4dF"))
          (result (org-loom-roll-dice parsed)))
-    (should (null result)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 4))
+    (should (cl-every (lambda (roll) (member roll '(-1 0 1))) 
+                      (alist-get :rolls result)))
+    (should (null (alist-get :modifier result)))
+    (should (numberp (alist-get :total result)))
+    (should (= (alist-get :total result) 
+               (apply #'+ (alist-get :rolls result))))))
+
+(ert-deftest org-loom-test-roll-dice-custom-oracle ()
+  "Test rolling oracle dice (custom string dice)."
+  ;; Test single oracle die
+  (let* ((parsed (org-loom-parse-dice-notation "dMythicAdjective"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 1))
+    (should (stringp (car (alist-get :rolls result))))
+    (should (null (alist-get :modifier result)))
+    (should (stringp (alist-get :total result)))
+    (should (string= (alist-get :total result) (car (alist-get :rolls result)))))
   
-  ;; Test custom dice (should return nil for now)
-  (let* ((parsed (org-loom-parse-dice-notation "2dX"))
+  ;; Test multiple oracle dice
+  (let* ((parsed (org-loom-parse-dice-notation "3dMythicAdjective"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 3))
+    (should (cl-every #'stringp (alist-get :rolls result)))
+    (should (null (alist-get :modifier result)))
+    (should (stringp (alist-get :total result)))
+    ;; Total should be the rolls joined with spaces
+    (should (string= (alist-get :total result)
+                     (mapconcat #'identity (alist-get :rolls result) " ")))))
+
+(ert-deftest org-loom-test-roll-dice-unknown-custom ()
+  "Test that unknown custom dice types return nil."
+  ;; Test unknown custom dice type
+  (let* ((parsed (org-loom-parse-dice-notation "2dUnknown"))
          (result (org-loom-roll-dice parsed)))
     (should (null result))))
 
@@ -349,8 +399,18 @@
   ;; Test invalid dice notation
   (should (null (org-loom-roll-dice-notation "invalid")))
   
-  ;; Test non-numeric dice (should return nil for now)
-  (should (null (org-loom-roll-dice-notation "4dF"))))
+  ;; Test custom fudge dice (should now work)
+  (let ((result (org-loom-roll-dice-notation "4dF")))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 4))
+    (should (cl-every (lambda (roll) (member roll '(-1 0 1))) 
+                      (alist-get :rolls result))))
+  
+  ;; Test custom oracle dice
+  (let ((result (org-loom-roll-dice-notation "2dMythicAdjective")))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 2))
+    (should (cl-every #'stringp (alist-get :rolls result)))))
 
 (provide 'org-loom-test)
 
