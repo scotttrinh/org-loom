@@ -92,6 +92,119 @@
   "Test that org-loom-setup command exists and is interactive."
   (should (commandp 'org-loom-setup)))
 
+;;; Dice notation parsing tests
+
+(ert-deftest org-loom-test-dice-notation-basic ()
+  "Test basic dice notation parsing."
+  ;; Simple d20
+  (let ((result (org-loom-parse-dice-notation "d20")))
+    (should (equal (alist-get :count result) 1))
+    (should (equal (alist-get :type result) 20))
+    (should (equal (alist-get :modifier result) 0))
+    (should (null (alist-get :modifier-sign result))))
+  
+  ;; 2d6
+  (let ((result (org-loom-parse-dice-notation "2d6")))
+    (should (equal (alist-get :count result) 2))
+    (should (equal (alist-get :type result) 6))
+    (should (equal (alist-get :modifier result) 0))
+    (should (null (alist-get :modifier-sign result)))))
+
+(ert-deftest org-loom-test-dice-notation-modifiers ()
+  "Test dice notation with positive and negative modifiers."
+  ;; d20+5
+  (let ((result (org-loom-parse-dice-notation "d20+5")))
+    (should (equal (alist-get :count result) 1))
+    (should (equal (alist-get :type result) 20))
+    (should (equal (alist-get :modifier result) 5))
+    (should (equal (alist-get :modifier-sign result) "+")))
+  
+  ;; 3d6-2
+  (let ((result (org-loom-parse-dice-notation "3d6-2")))
+    (should (equal (alist-get :count result) 3))
+    (should (equal (alist-get :type result) 6))
+    (should (equal (alist-get :modifier result) -2))
+    (should (equal (alist-get :modifier-sign result) "-")))
+  
+  ;; 2d8+10
+  (let ((result (org-loom-parse-dice-notation "2d8+10")))
+    (should (equal (alist-get :count result) 2))
+    (should (equal (alist-get :type result) 8))
+    (should (equal (alist-get :modifier result) 10))
+    (should (equal (alist-get :modifier-sign result) "+"))))
+
+(ert-deftest org-loom-test-dice-notation-non-numeric ()
+  "Test dice notation with non-numeric dice types."
+  ;; dF (single fudge die)
+  (let ((result (org-loom-parse-dice-notation "dF")))
+    (should (equal (alist-get :count result) 1))
+    (should (equal (alist-get :type result) "F"))
+    (should (equal (alist-get :modifier result) 0))
+    (should (null (alist-get :modifier-sign result))))
+  
+  ;; 4dF (four fudge dice)
+  (let ((result (org-loom-parse-dice-notation "4dF")))
+    (should (equal (alist-get :count result) 4))
+    (should (equal (alist-get :type result) "F"))
+    (should (equal (alist-get :modifier result) 0))
+    (should (null (alist-get :modifier-sign result))))
+  
+  ;; 2dX+3 (custom die type)
+  (let ((result (org-loom-parse-dice-notation "2dX+3")))
+    (should (equal (alist-get :count result) 2))
+    (should (equal (alist-get :type result) "X"))
+    (should (equal (alist-get :modifier result) 3))
+    (should (equal (alist-get :modifier-sign result) "+"))))
+
+(ert-deftest org-loom-test-dice-notation-edge-cases ()
+  "Test edge cases and various die types."
+  ;; d100
+  (let ((result (org-loom-parse-dice-notation "d100")))
+    (should (equal (alist-get :count result) 1))
+    (should (equal (alist-get :type result) 100))
+    (should (equal (alist-get :modifier result) 0)))
+  
+  ;; 10d10
+  (let ((result (org-loom-parse-dice-notation "10d10")))
+    (should (equal (alist-get :count result) 10))
+    (should (equal (alist-get :type result) 10))
+    (should (equal (alist-get :modifier result) 0)))
+  
+  ;; 1d4+1 (explicit single die)
+  (let ((result (org-loom-parse-dice-notation "1d4+1")))
+    (should (equal (alist-get :count result) 1))
+    (should (equal (alist-get :type result) 4))
+    (should (equal (alist-get :modifier result) 1)))
+  
+  ;; Multi-letter die type
+  (let ((result (org-loom-parse-dice-notation "2dFudge")))
+    (should (equal (alist-get :count result) 2))
+    (should (equal (alist-get :type result) "Fudge"))
+    (should (equal (alist-get :modifier result) 0))))
+
+(ert-deftest org-loom-test-dice-notation-invalid ()
+  "Test that invalid dice notation returns nil."
+  ;; Invalid formats should return nil
+  (should (null (org-loom-parse-dice-notation "invalid")))
+  (should (null (org-loom-parse-dice-notation "2x6")))
+  (should (null (org-loom-parse-dice-notation "d")))
+  (should (null (org-loom-parse-dice-notation "2d")))
+  (should (null (org-loom-parse-dice-notation "d6+")))
+  (should (null (org-loom-parse-dice-notation "d6-")))
+  (should (null (org-loom-parse-dice-notation "")))
+  (should (null (org-loom-parse-dice-notation nil)))
+  (should (null (org-loom-parse-dice-notation "2d6++")))
+  (should (null (org-loom-parse-dice-notation "2d6+a"))))
+
+(ert-deftest org-loom-test-dice-notation-whitespace ()
+  "Test that dice notation with whitespace fails (strict parsing)."
+  ;; Whitespace should make parsing fail for strict notation
+  (should (null (org-loom-parse-dice-notation " d20")))
+  (should (null (org-loom-parse-dice-notation "d20 ")))
+  (should (null (org-loom-parse-dice-notation "2 d6")))
+  (should (null (org-loom-parse-dice-notation "2d 6")))
+  (should (null (org-loom-parse-dice-notation "2d6 +2"))))
+
 (provide 'org-loom-test)
 
 ;;; org-loom-test.el ends here 

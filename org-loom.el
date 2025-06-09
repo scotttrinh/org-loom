@@ -150,6 +150,42 @@
   (unless (file-exists-p org-loom-data-directory)
     (make-directory org-loom-data-directory t)))
 
+;;; Dice Notation Parsing
+
+(defun org-loom-parse-dice-notation (dice-string)
+  "Parse dice notation string and return components.
+
+DICE-STRING should be in format like '2d6', 'd20', '3d8+2', '4dF-1', etc.
+
+Returns an alist with the following keys if parsing succeeds:
+  - :count - number of dice (defaults to 1 if not specified)
+  - :type - die type (number or string like 'F' for fudge dice)  
+  - :modifier - numeric modifier (0 if not specified)
+  - :modifier-sign - sign of modifier (+ or -, nil if no modifier)
+
+Returns nil if the string doesn't match dice notation."
+  (when (and dice-string (stringp dice-string))
+    (let ((dice-regex "^\\([0-9]+\\)?d\\([0-9]+\\|[a-zA-Z]+\\)\\([-+][0-9]+\\)?$"))
+      (when (string-match dice-regex dice-string)
+        (let* ((count-str (match-string 1 dice-string))
+               (type-str (match-string 2 dice-string))
+               (modifier-str (match-string 3 dice-string))
+               (count (if count-str (string-to-number count-str) 1))
+               (type (if (string-match "^[0-9]+$" type-str)
+                        (string-to-number type-str)
+                      type-str))
+               (modifier 0)
+               (modifier-sign nil))
+          (when modifier-str
+            (setq modifier-sign (substring modifier-str 0 1))
+            (setq modifier (string-to-number (substring modifier-str 1)))
+            (when (string= modifier-sign "-")
+              (setq modifier (- modifier))))
+          `((:count . ,count)
+            (:type . ,type)
+            (:modifier . ,modifier)
+            (:modifier-sign . ,modifier-sign)))))))
+
 ;;; Hooks
 
 (defvar org-loom-mode-hook nil
