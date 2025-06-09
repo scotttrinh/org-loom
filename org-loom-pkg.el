@@ -3,4 +3,4 @@
   '((emacs "26.1")
     (org "9.0"))
   :keywords '("games" "outlines" "wp")
-  :url "https://github.com/yourusername/org-loom") 
+  :url "https://github.com/scotttrinh/org-loom") 

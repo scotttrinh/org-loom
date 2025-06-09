@@ -1,12 +1,12 @@
 ;;; org-loom.el --- Virtual table top for solo roleplaying journaling -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024
+;; Copyright (C) 2025
 
-;; Author: Your Name <your.email@example.com>
+;; Author: Scott Trinh <scott@scotttrinh.com>
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "26.1") (org "9.0"))
-;; Keywords: games, outlines, wp
-;; URL: https://github.com/yourusername/org-loom
+;; Keywords: games, outlines
+;; URL: https://github.com/scotttrinh/org-loom
 
 ;; This file is not part of GNU Emacs.
 
@@ -35,7 +35,7 @@
 ;; - Scene and session organization
 ;; - Dice rolling and random generators
 ;; - Campaign and world building tools
-;; - Integration with Org mode's agenda and capture systems
+;; - Integration with Org mode's capture systems
 
 ;;; Code:
 

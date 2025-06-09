@@ -1,8 +1,8 @@
 ;;; org-loom-test.el --- Tests for org-loom -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2024
+;; Copyright (C) 2025
 
-;; Author: Your Name <your.email@example.com>
+;; Author: Scott Trinh <scott@scotttrinh.com>
 
 ;; This file is not part of GNU Emacs.
 
