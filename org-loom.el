@@ -170,6 +170,163 @@ Example custom dice:
   ;; Implementation will go here
   (message "Creating new character..."))
 
+;;; Event Ontology
+
+;;; Core Event Types
+;; These are the fundamental event categories that represent state changes
+
+(defconst org-loom-event-types
+  '(character-state-changed    ; Character stats, health, resources changed
+    relationship-changed       ; NPC relationships, bonds, reputation changed  
+    world-state-changed       ; Locations, situations, environmental changes
+    campaign-progression      ; Threads, milestones, story arcs
+    resource-transaction      ; Items, currency, equipment gained/lost
+    mechanical-state-changed  ; Initiative, active effects, temporary modifiers
+    advancement-earned)       ; Character advancement, skill increases, new abilities
+  "Core event types representing fundamental state changes in the game.
+
+These symbols are used as the primary :event-type in all org-loom events.
+Plugins should use these standard types when possible, and may define
+subtypes using the :semantic-type field for more specific categorization.")
+
+;;; Semantic Categories  
+;; Finer-grained categorization for loose coupling between plugins
+
+(defconst org-loom-semantic-types
+  '(;; Character mechanics
+    damage-dealt           ; Physical/mental harm inflicted
+    healing-received       ; Recovery of health/stress
+    skill-test            ; Any kind of ability check
+    character-growth      ; Advancement, learning, improvement
+    
+    ;; Social dynamics
+    reputation-shift      ; Standing with groups/individuals changed
+    relationship-formed   ; New bonds, enemies, allies
+    social-conflict       ; Arguments, negotiations, persuasion
+    
+    ;; Narrative progression  
+    information-discovered ; Clues, secrets, knowledge gained
+    mystery-solved        ; Questions answered, puzzles completed
+    plot-advanced         ; Story threads progressed
+    complication-introduced ; New problems, obstacles, challenges
+    
+    ;; World interaction
+    location-discovered   ; New places explored
+    environment-changed   ; World state alterations
+    resource-discovered   ; Treasure, items, opportunities found
+    
+    ;; Mechanical systems
+    initiative-changed    ; Turn order, timing modifications
+    effect-applied        ; Temporary bonuses, penalties, conditions
+    conflict-resolved)    ; Combat, contests, challenges completed
+  "Semantic event categories for plugin interoperability.
+
+These symbols provide a standardized vocabulary that allows different
+plugins to understand and react to events from other plugins without
+tight coupling. Use as :semantic-type in event plists.")
+
+;;; Standard Event Structure
+;; All events should follow this basic structure with plugin-specific extensions
+
+(defconst org-loom-event-schema
+  '(:event-type          ; Required: symbol from org-loom-event-types
+    :semantic-type       ; Optional: symbol from org-loom-semantic-types  
+    :source-plugin       ; Required: symbol identifying the plugin that generated this event
+    :timestamp          ; Required: ISO timestamp string
+    :source-location    ; Optional: org-mode link to where event originated
+    
+    ;; Standard actor/target roles
+    :actor              ; Who performed the action
+    :target             ; Who/what was affected 
+    :witnesses          ; Who observed (list)
+    :affected-parties   ; Additional entities impacted (list)
+    
+    ;; Standard outcome information
+    :outcome            ; Symbol: success, failure, partial-success, success-with-cost
+    :magnitude          ; Numeric: how significant the outcome (0-10 scale)
+    :consequences       ; List of follow-up effects
+    
+    ;; Plugin extension space
+    ;; Plugins should add their specific data using :plugin-name-data keys
+    ;; e.g. :fate-data, :mythic-data, :ironsworn-data)
+  "Standard structure for org-loom events.
+
+All events should include the required fields and may include optional
+standard fields. Plugins should extend events using :plugin-name-data
+keys to maintain loose coupling.")
+
+;;; Event Utility Functions
+
+(defun org-loom-create-event (event-type &rest plist)
+  "Create a standardized org-loom event.
+
+EVENT-TYPE should be a symbol from `org-loom-event-types'.
+PLIST contains additional event data following the schema in
+`org-loom-event-schema'.
+
+Automatically adds :timestamp if not provided."
+  (let ((event (copy-sequence plist)))
+    (plist-put event :event-type event-type)
+    (unless (plist-get event :timestamp)
+      (plist-put event :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")))
+    event))
+
+(defun org-loom-event-matches-p (event &rest criteria)
+  "Check if EVENT matches all provided CRITERIA.
+
+CRITERIA should be key-value pairs that must all match for the
+event to be considered a match. Supports partial matching for lists.
+
+Example: (org-loom-event-matches-p event :event-type 'character-state-changed 
+                                         :semantic-type 'damage-dealt)"
+  (let ((matches t))
+    (while (and criteria matches)
+      (let ((key (car criteria))
+            (value (cadr criteria)))
+        (let ((event-value (plist-get event key)))
+          (setq matches (cond
+                         ((and (listp event-value) (not (listp value)))
+                          ;; Event value is list, criteria is single item - check membership
+                          (member value event-value))
+                         ((and (listp event-value) (listp value))
+                          ;; Both are lists - check intersection
+                          (seq-intersection event-value value))
+                         (t
+                          ;; Simple equality check
+                          (equal event-value value)))))
+        (setq criteria (cddr criteria))))
+    matches))
+
+(defvar org-loom-event-handlers '()
+  "List of event handler functions.
+
+Each handler should be a function that accepts an event plist.
+Handlers are called in order when events are emitted.")
+
+(defun org-loom-emit-event (event)
+  "Emit an EVENT to all registered handlers.
+
+EVENT should be a plist following the org-loom event schema.
+All functions in `org-loom-event-handlers' will be called with
+the event as their argument."
+  (dolist (handler org-loom-event-handlers)
+    (condition-case err
+        (funcall handler event)
+      (error 
+       (message "org-loom event handler error: %s" err)))))
+
+(defun org-loom-register-event-handler (handler)
+  "Register an event HANDLER function.
+
+HANDLER should be a function that accepts an event plist.
+It will be called for all events emitted through `org-loom-emit-event'."
+  (unless (member handler org-loom-event-handlers)
+    (push handler org-loom-event-handlers)))
+
+(defun org-loom-unregister-event-handler (handler)
+  "Unregister an event HANDLER function."
+  (setq org-loom-event-handlers (delq handler org-loom-event-handlers)))
+
 ;;; Utility Functions
 
 (defun org-loom--ensure-data-directory ()
