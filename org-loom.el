@@ -181,10 +181,62 @@ Returns nil if the string doesn't match dice notation."
             (setq modifier (string-to-number (substring modifier-str 1)))
             (when (string= modifier-sign "-")
               (setq modifier (- modifier))))
-          `((:count . ,count)
-            (:type . ,type)
-            (:modifier . ,modifier)
-            (:modifier-sign . ,modifier-sign)))))))
+                     `((:count . ,count)
+             (:type . ,type)
+             (:modifier . ,modifier)
+             (:modifier-sign . ,modifier-sign)))))))
+
+(defun org-loom-roll-dice (dice-alist)
+  "Roll dice based on parsed dice notation alist.
+
+DICE-ALIST should be the output from `org-loom-parse-dice-notation'.
+
+Returns an alist with the following keys if rolling succeeds:
+  - :rolls - list of individual die roll results
+  - :modifier - the modifier value applied (0 if none)
+  - :total - sum of all rolls plus modifier
+
+Returns nil if the dice cannot be rolled (e.g., non-numeric dice type,
+invalid count, etc.)."
+  (when (and dice-alist
+             (listp dice-alist))
+    (let ((count (alist-get :count dice-alist))
+          (type (alist-get :type dice-alist))
+          (modifier (alist-get :modifier dice-alist)))
+      ;; Only process numeric dice for now
+      (when (and count type modifier
+                 (numberp count)
+                 (numberp type)
+                 (numberp modifier)
+                 (> count 0)
+                 (> type 0))
+        (let ((rolls '())
+              (roll-sum 0))
+          ;; Roll each die
+          (dotimes (_ count)
+            (let ((roll (1+ (random type))))
+              (push roll rolls)
+              (setq roll-sum (+ roll-sum roll))))
+          ;; Reverse rolls to maintain order
+          (setq rolls (nreverse rolls))
+          ;; Calculate total with modifier
+          (let ((total (+ roll-sum modifier)))
+            `((:rolls . ,rolls)
+              (:modifier . ,modifier)
+              (:total . ,total))))))))
+
+(defun org-loom-roll-dice-notation (dice-string)
+  "Parse and roll dice from dice notation string.
+
+DICE-STRING should be in dice notation format like '2d6+3'.
+
+This is a convenience function that combines `org-loom-parse-dice-notation'
+and `org-loom-roll-dice'.
+
+Returns the same format as `org-loom-roll-dice' or nil if parsing
+or rolling fails."
+  (when-let ((parsed (org-loom-parse-dice-notation dice-string)))
+    (org-loom-roll-dice parsed)))
 
 ;;; Hooks
 

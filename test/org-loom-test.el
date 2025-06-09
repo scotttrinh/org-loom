@@ -205,6 +205,153 @@
   (should (null (org-loom-parse-dice-notation "2d 6")))
   (should (null (org-loom-parse-dice-notation "2d6 +2"))))
 
+;;; Dice rolling tests
+
+(ert-deftest org-loom-test-roll-dice-basic ()
+  "Test basic dice rolling functionality."
+  ;; Test d6 (single six-sided die)
+  (let* ((parsed (org-loom-parse-dice-notation "d6"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 1))
+    (should (>= (car (alist-get :rolls result)) 1))
+    (should (<= (car (alist-get :rolls result)) 6))
+    (should (= (alist-get :modifier result) 0))
+    (should (= (alist-get :total result) (car (alist-get :rolls result)))))
+  
+  ;; Test 2d6 (two six-sided dice)
+  (let* ((parsed (org-loom-parse-dice-notation "2d6"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 2))
+    (should (>= (car (alist-get :rolls result)) 1))
+    (should (<= (car (alist-get :rolls result)) 6))
+    (should (>= (cadr (alist-get :rolls result)) 1))
+    (should (<= (cadr (alist-get :rolls result)) 6))
+    (should (= (alist-get :modifier result) 0))
+    (should (= (alist-get :total result) 
+               (+ (car (alist-get :rolls result))
+                  (cadr (alist-get :rolls result)))))))
+
+(ert-deftest org-loom-test-roll-dice-with-modifiers ()
+  "Test dice rolling with positive and negative modifiers."
+  ;; Test d20+5
+  (let* ((parsed (org-loom-parse-dice-notation "d20+5"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 1))
+    (should (>= (car (alist-get :rolls result)) 1))
+    (should (<= (car (alist-get :rolls result)) 20))
+    (should (= (alist-get :modifier result) 5))
+    (should (= (alist-get :total result) 
+               (+ (car (alist-get :rolls result)) 5))))
+  
+  ;; Test 3d6-2
+  (let* ((parsed (org-loom-parse-dice-notation "3d6-2"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 3))
+    (should (= (alist-get :modifier result) -2))
+    (let ((roll-sum (apply #'+ (alist-get :rolls result))))
+      (should (= (alist-get :total result) (- roll-sum 2))))))
+
+(ert-deftest org-loom-test-roll-dice-edge-cases ()
+  "Test dice rolling edge cases and various die types."
+  ;; Test d100
+  (let* ((parsed (org-loom-parse-dice-notation "d100"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 1))
+    (should (>= (car (alist-get :rolls result)) 1))
+    (should (<= (car (alist-get :rolls result)) 100)))
+  
+  ;; Test d4+1
+  (let* ((parsed (org-loom-parse-dice-notation "d4+1"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 1))
+    (should (>= (car (alist-get :rolls result)) 1))
+    (should (<= (car (alist-get :rolls result)) 4))
+    (should (= (alist-get :modifier result) 1))
+    (should (= (alist-get :total result) 
+               (+ (car (alist-get :rolls result)) 1))))
+  
+  ;; Test multiple dice with large modifier
+  (let* ((parsed (org-loom-parse-dice-notation "4d8+10"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 4))
+    (should (= (alist-get :modifier result) 10))
+    (let ((roll-sum (apply #'+ (alist-get :rolls result))))
+      (should (= (alist-get :total result) (+ roll-sum 10))))))
+
+(ert-deftest org-loom-test-roll-dice-non-numeric ()
+  "Test that non-numeric dice return nil (not implemented yet)."
+  ;; Test fudge dice (should return nil for now)
+  (let* ((parsed (org-loom-parse-dice-notation "4dF"))
+         (result (org-loom-roll-dice parsed)))
+    (should (null result)))
+  
+  ;; Test custom dice (should return nil for now)
+  (let* ((parsed (org-loom-parse-dice-notation "2dX"))
+         (result (org-loom-roll-dice parsed)))
+    (should (null result))))
+
+(ert-deftest org-loom-test-roll-dice-invalid-input ()
+  "Test that invalid input returns nil."
+  ;; Test nil input
+  (should (null (org-loom-roll-dice nil)))
+  
+  ;; Test empty alist
+  (should (null (org-loom-roll-dice '())))
+  
+  ;; Test invalid alist structure
+  (should (null (org-loom-roll-dice '((:invalid . "data")))))
+  
+  ;; Test with missing required keys
+  (should (null (org-loom-roll-dice '((:count . 2)))))
+  
+  ;; Test with zero count
+  (should (null (org-loom-roll-dice '((:count . 0) (:type . 6) (:modifier . 0)))))
+  
+  ;; Test with negative count  
+  (should (null (org-loom-roll-dice '((:count . -1) (:type . 6) (:modifier . 0)))))
+  
+  ;; Test with zero die type
+  (should (null (org-loom-roll-dice '((:count . 1) (:type . 0) (:modifier . 0)))))
+  
+  ;; Test with negative die type
+  (should (null (org-loom-roll-dice '((:count . 1) (:type . -6) (:modifier . 0))))))
+
+(ert-deftest org-loom-test-roll-dice-deterministic ()
+  "Test that dice rolling produces consistent structure."
+  ;; Test that all valid rolls produce the expected structure
+  (let* ((parsed (org-loom-parse-dice-notation "2d6+3"))
+         (result (org-loom-roll-dice parsed)))
+    (should result)
+    (should (alist-get :rolls result))
+    (should (numberp (alist-get :modifier result)))
+    (should (numberp (alist-get :total result)))
+    (should (listp (alist-get :rolls result)))
+    (should (= (length (alist-get :rolls result)) 2))
+    (should (cl-every #'numberp (alist-get :rolls result)))))
+
+(ert-deftest org-loom-test-roll-dice-notation-convenience ()
+  "Test the convenience function that combines parsing and rolling."
+  ;; Test valid dice notation
+  (let ((result (org-loom-roll-dice-notation "d20+5")))
+    (should result)
+    (should (= (length (alist-get :rolls result)) 1))
+    (should (= (alist-get :modifier result) 5))
+    (should (>= (car (alist-get :rolls result)) 1))
+    (should (<= (car (alist-get :rolls result)) 20)))
+  
+  ;; Test invalid dice notation
+  (should (null (org-loom-roll-dice-notation "invalid")))
+  
+  ;; Test non-numeric dice (should return nil for now)
+  (should (null (org-loom-roll-dice-notation "4dF"))))
+
 (provide 'org-loom-test)
 
 ;;; org-loom-test.el ends here 
