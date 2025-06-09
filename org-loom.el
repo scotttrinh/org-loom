@@ -176,75 +176,43 @@ Example custom dice:
 ;; These are the fundamental event categories that represent state changes
 
 (defconst org-loom-event-types
-  '(character-state-changed    ; Character stats, health, resources changed
-    relationship-changed       ; NPC relationships, bonds, reputation changed  
-    world-state-changed       ; Locations, situations, environmental changes
-    campaign-progression      ; Threads, milestones, story arcs
-    resource-transaction      ; Items, currency, equipment gained/lost
-    mechanical-state-changed  ; Initiative, active effects, temporary modifiers
-    advancement-earned)       ; Character advancement, skill increases, new abilities
+  '(;; Character
+    character-created            ; Character is created
+    character-health-changed     ; Character takes or heals from damage
+    character-statistic-changed  ; Character's attributes, skills, or other statistics change
+    character-equipment-changed  ; Character's equipment, possessions, or other belongings change
+    character-advancement-earned ; Character gains experience, levels up, or other advancement
+    character-condition-changed  ; Character's condition, state, or other status changes
+
+    ;; Session
+    session-state-changed        ; Session's condition, state, or other status changes
+
+    ;; Enounter
+    encounter-state-changed      ; Encounter's condition, state, or other status changes
+
+    ;; Party
+    party-membership-changed     ; Character joins or leaves a party
+    party-state-changed          ; Party's condition, state, or other status changes
+    party-location-changed       ; Party moves to a new location
+
+    ;; Campaign
+    campaign-state-changed       ; Threads, milestones, story arcs
+    )
   "Core event types representing fundamental state changes in the game.
 
-These symbols are used as the primary :event-type in all org-loom events.
-Plugins should use these standard types when possible, and may define
-subtypes using the :semantic-type field for more specific categorization.")
+These symbols are used as the primary :type in all org-loom events.
+Plugins should use these standard types when possible.")
 
-;;; Semantic Categories  
-;; Finer-grained categorization for loose coupling between plugins
-
-(defconst org-loom-semantic-types
-  '(;; Character mechanics
-    damage-dealt           ; Physical/mental harm inflicted
-    healing-received       ; Recovery of health/stress
-    skill-test            ; Any kind of ability check
-    character-growth      ; Advancement, learning, improvement
-    
-    ;; Social dynamics
-    reputation-shift      ; Standing with groups/individuals changed
-    relationship-formed   ; New bonds, enemies, allies
-    social-conflict       ; Arguments, negotiations, persuasion
-    
-    ;; Narrative progression  
-    information-discovered ; Clues, secrets, knowledge gained
-    mystery-solved        ; Questions answered, puzzles completed
-    plot-advanced         ; Story threads progressed
-    complication-introduced ; New problems, obstacles, challenges
-    
-    ;; World interaction
-    location-discovered   ; New places explored
-    environment-changed   ; World state alterations
-    resource-discovered   ; Treasure, items, opportunities found
-    
-    ;; Mechanical systems
-    initiative-changed    ; Turn order, timing modifications
-    effect-applied        ; Temporary bonuses, penalties, conditions
-    conflict-resolved)    ; Combat, contests, challenges completed
-  "Semantic event categories for plugin interoperability.
-
-These symbols provide a standardized vocabulary that allows different
-plugins to understand and react to events from other plugins without
-tight coupling. Use as :semantic-type in event plists.")
 
 ;;; Standard Event Structure
 ;; All events should follow this basic structure with plugin-specific extensions
 
 (defconst org-loom-event-schema
-  '(:event-type          ; Required: symbol from org-loom-event-types
-    :semantic-type       ; Optional: symbol from org-loom-semantic-types  
-    :source-plugin       ; Required: symbol identifying the plugin that generated this event
+  '(:type               ; Required: symbol from org-loom-event-types
+    :source-plugin      ; Required: symbol identifying the plugin that generated this event
     :timestamp          ; Required: ISO timestamp string
+    :subject            ; Required: org-mode link to who/what is the subject of the event
     :source-location    ; Optional: org-mode link to where event originated
-    
-    ;; Standard actor/target roles
-    :actor              ; Who performed the action
-    :target             ; Who/what was affected 
-    :witnesses          ; Who observed (list)
-    :affected-parties   ; Additional entities impacted (list)
-    
-    ;; Standard outcome information
-    :outcome            ; Symbol: success, failure, partial-success, success-with-cost
-    :magnitude          ; Numeric: how significant the outcome (0-10 scale)
-    :consequences       ; List of follow-up effects
     
     ;; Plugin extension space
     ;; Plugins should add their specific data using :plugin-name-data keys
@@ -266,7 +234,7 @@ PLIST contains additional event data following the schema in
 
 Automatically adds :timestamp if not provided."
   (let ((event (copy-sequence plist)))
-    (plist-put event :event-type event-type)
+    (plist-put event :type event-type)
     (unless (plist-get event :timestamp)
       (plist-put event :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")))
     event))
@@ -277,8 +245,7 @@ Automatically adds :timestamp if not provided."
 CRITERIA should be key-value pairs that must all match for the
 event to be considered a match. Supports partial matching for lists.
 
-Example: (org-loom-event-matches-p event :event-type 'character-state-changed 
-                                         :semantic-type 'damage-dealt)"
+Example: (org-loom-event-matches-p event :type 'character-state-changed)"
   (let ((matches t))
     (while (and criteria matches)
       (let ((key (car criteria))
